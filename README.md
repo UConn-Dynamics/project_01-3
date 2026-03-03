@@ -5,3 +5,6 @@ Merge code after that.
 Goal to upload individual code by Sunday night 3/1.
 Monday night each person reviews code, implements variables, etc. 3/2.
 Tuesday meeting to live merge code. 3/3.
+
+Meeting 3/3
+Team is trying to figure out how to use github and merge code. Final code to be kept in the Pluto .jl file in main. 
