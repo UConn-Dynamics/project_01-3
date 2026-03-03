@@ -8,3 +8,9 @@ Tuesday meeting to live merge code. 3/3.
 
 Meeting 3/3
 Team is trying to figure out how to use github and merge code. Final code to be kept in the Pluto .jl file in main. 
+Actions
+-Adhy to do markdowns / methodology
+-Clay to get second graph for faster speed
+-Julia to add Lagrangian and 2D graph
+-Dan to merge his code and troubleshoot differences since his was similar
+Team to regroup once actions are done, tomorrow.
