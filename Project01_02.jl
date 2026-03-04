@@ -97,7 +97,7 @@ Divide by $mL^2$ and solve for $\ddot{\theta}$:
 
 $\ddot{\theta} = \frac{\Omega^2}{L}(w_1 + L\sin\theta)\cos\theta - \frac{g}{L}\sin\theta$
 
-This matches the ODE implemented in the notebook:
+Resulting in:
 
 $\dot{\theta} = \omega,\quad \dot{\omega} = \frac{\Omega^2}{L}(w_1 + L\sin\theta)\cos\theta - \frac{g}{L}\sin\theta$
 
