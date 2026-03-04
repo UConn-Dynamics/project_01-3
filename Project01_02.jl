@@ -53,14 +53,68 @@ init_theta = 0.25;
 end
 
 # ╔═╡ 0fbb0461-afe1-46f9-bb1b-13a522ca9bea
+#begin
+#    u0 = [init_theta, 0.0]  # Initial angle and velocity
+#    tspan = (0.0, 10.0)         # Simulate for 10 seconds
+#    p = Ω_val                 
+#    
+#    prob = ODEProblem(pendulum_system!, u0, tspan, p)
+#    sol = solve(prob, Tsit5(), reltol=1e-8, abstol=1e-8)
+#end
+
+# ╔═╡ Symbolics: build θ̈(θ, θ̇, t, m, g, L, Ω, w1, h1) from L = T − V
 begin
-    u0 = [init_theta, 0.0]  # Initial angle and velocity
-    tspan = (0.0, 10.0)         # Simulate for 10 seconds
-    p = Ω_val                 
-    
-    prob = ODEProblem(pendulum_system!, u0, tspan, p)
-    sol = solve(prob, Tsit5(), reltol=1e-8, abstol=1e-8)
+    @variables t
+    @variables θ(t)
+    D = Differential(t)
+    θ̇ = D(θ)
+
+    # Parameter symbols (kept distinct from numeric m, g, L, etc.)
+    @variables mS gS LS ΩS w1S h1S
+
+    # Kinetic energy: T = ½ m [ L^2 θ̇^2 + Ω^2 (w1 + L sinθ)^2 ]
+    kinetic_energy = (1//2) * mS * (LS^2 * θ̇^2 + ΩS^2 * (w1S + LS * sin(θ))^2)
+
+    # Potential energy: V = m g (h1 − L cosθ)
+    potential_energy = mS * gS * (h1S - LS * cos(θ))
+
+    # Lagrangian
+    lagrangian = kinetic_energy - potential_energy
+
+    # Euler–Lagrange: d/dt(∂L/∂θ̇) − ∂L/∂θ = 0
+    dL_dθdot = Symbolics.derivative(lagrangian, θ̇)
+    dL_dθ    = Symbolics.derivative(lagrangian, θ)
+    eom      = expand_derivatives(D(dL_dθdot) - dL_dθ)
+
+    # Solve for θ̈ symbolically
+    θ̈ = D(D(θ))
+    θ̈_expr = Symbolics.solve_for(eom, θ̈)
+
+    # Build a fast numerical function: θ̈(θ, θ̇, t, m, g, L, Ω, w1, h1)
+    tmp_fun = build_function(θ̈_expr,
+                             θ, θ̇, t,
+                             mS, gS, LS, ΩS, w1S, h1S;
+                             expression = Val(false))
+    θ_double_dot_function = tmp_fun isa Function ? tmp_fun : tmp_fun[1]
+
+    # (Optional) Latex views in Pluto
+    T_ltx  = latexify(kinetic_energy)
+    V_ltx  = latexify(potential_energy)
+    L_ltx  = latexify(lagrangian)
+    EOM_ltx = latexify(eom ~ 0)
 end
+# redefining function with symbolics per previous added paragraph
+    # State u = [θ, ω] with ω = θ̇
+    function pendulum_system!(du, u, p, t)
+        θ, ω = u
+        Ω = p  # keep the same convention: parameter p carries Ω
+
+        du[1] = ω
+        du[2] = θ_double_dot_function(
+            θ, ω, t,
+            m, g, L, Ω, w1, h1
+        )
+    end
 
 # ╔═╡ 64a37cb4-097e-4c85-b773-8d85b6870e49
 plot(sol, vars=(0, 1), 
@@ -156,6 +210,18 @@ begin
     end
 
     gif(anim, "spinning_pendulum.gif", fps=30)
+end
+
+#Solve also for Ω_val2 and overlay θ(t)
+begin
+    prob2 = ODEProblem(pendulum_system!, [init_theta, 0.0], tspan, Ω_val2)
+    sol2  = solve(prob2, Tsit5(), reltol=1e-8, abstol=1e-8)
+
+    plt_angles = plot(sol.t, first.(sol.u),
+                      lw=2, label="Ω = $Ω_val rad/s",
+                      xlabel="Time (s)", ylabel="Theta (rad)",
+                      title="Angle vs Time (slow vs fast)")
+    plot!(plt_angles, sol2.t, first.(sol2.u), lw=2, ls=:dash, label="Ω = $Ω_val2 rad/s")
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
