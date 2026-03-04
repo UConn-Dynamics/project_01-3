@@ -28,6 +28,81 @@ Your team's goal is to
 
 """
 
+# ╔═╡ 5b2edaab-756c-42f1-a675-778367b34cfb
+md"""# Building EOM using Lagrange and least action
+
+$L = T - V$
+
+In this project, we model a pendulum attached to a spinning frame rotating at a constant speed $\Omega$. The goal is to build an equation of motion for the pendulum angle $\theta(t)$ that matches the ODE used in the simulation. 
+
+To solve for $T$, we include (1) the normal pendulum kinetic energy from swinging and (2) the kinetic energy from the bob moving around the rotation axis as the frame spins.
+
+We write:
+
+$T = T_1 + T_2$
+
+Swinging kinetic energy:
+
+$T_1 = \frac{1}{2} m L^2 \dot{\theta}^2$
+
+Rotational kinetic energy from the spinning frame:
+
+$T_2 = \frac{1}{2} m \Omega^2 p^2$
+
+We model the radial distance from the spin axis to the bob as:
+
+$p = w_1 + L\sin\theta$
+
+Therefore:
+
+$T = \frac{1}{2} m L^2 \dot{\theta}^2 + \frac{1}{2} m \Omega^2 (w_1 + L\sin\theta)^2$
+
+To solve for $V$, we use gravitational potential energy. With height modeled as $h = -L\cos\theta$:
+
+$V = mgh = mg(-L\cos\theta) = -mgL\cos\theta$
+
+Combining $T$ and $V$ gives:
+
+$L = T - V = \frac{1}{2} m L^2 \dot{\theta}^2 + \frac{1}{2} m \Omega^2 (w_1 + L\sin\theta)^2 + mgL\cos\theta$
+
+Now apply the Euler–Lagrange equation:
+
+$\frac{d}{dt}\left(\frac{\partial L}{\partial \dot{\theta}}\right) - \frac{\partial L}{\partial \theta} = 0$
+
+Step 1: derivative with respect to $\dot{\theta}$:
+
+$\frac{\partial L}{\partial \dot{\theta}} = mL^2\dot{\theta}$
+$\frac{d}{dt}\left(\frac{\partial L}{\partial \dot{\theta}}\right) = mL^2\ddot{\theta}$
+
+Step 2: derivative with respect to $\theta$:
+
+For the rotation term:
+
+$\frac{\partial}{\partial\theta}\left(\frac{1}{2}m\Omega^2(w_1 + L\sin\theta)^2\right)
+= m\Omega^2(w_1 + L\sin\theta)\cdot L\cos\theta$
+
+For the gravity term:
+
+$\frac{\partial}{\partial\theta}(mgL\cos\theta) = -mgL\sin\theta$
+
+So:
+
+$\frac{\partial L}{\partial \theta} = m\Omega^2L(w_1 + L\sin\theta)\cos\theta - mgL\sin\theta$
+
+Substitute into Euler–Lagrange:
+
+$mL^2\ddot{\theta} - \left[m\Omega^2L(w_1 + L\sin\theta)\cos\theta - mgL\sin\theta\right] = 0$
+
+Divide by $mL^2$ and solve for $\ddot{\theta}$:
+
+$\ddot{\theta} = \frac{\Omega^2}{L}(w_1 + L\sin\theta)\cos\theta - \frac{g}{L}\sin\theta$
+
+Resulting in:
+
+$\dot{\theta} = \omega,\quad \dot{\omega} = \frac{\Omega^2}{L}(w_1 + L\sin\theta)\cos\theta - \frac{g}{L}\sin\theta$
+
+"""
+
 # ╔═╡ 599de35a-b0c8-4c03-8112-112b6fec25e7
 begin
 
@@ -2908,6 +2983,7 @@ version = "1.13.0+0"
 # ╔═╡ Cell order:
 # ╟─f17103ea-06bf-11f1-a2b0-79e68ed152eb
 # ╠═0d9be664-d7c5-4084-add2-25e5418742d6
+# ╟─5b2edaab-756c-42f1-a675-778367b34cfb
 # ╠═599de35a-b0c8-4c03-8112-112b6fec25e7
 # ╠═0fbb0461-afe1-46f9-bb1b-13a522ca9bea
 # ╠═64a37cb4-097e-4c85-b773-8d85b6870e49
