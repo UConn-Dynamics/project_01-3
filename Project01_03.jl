@@ -5,7 +5,7 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 0d9be664-d7c5-4084-add2-25e5418742d6
-using DifferentialEquations, Plots, PlutoUI
+using DifferentialEquations, Plots, PlutoUI , Symbolics, Latexify, OrdinaryDiffEq
 
 # ╔═╡ f17103ea-06bf-11f1-a2b0-79e68ed152eb
 md"""# Project_01 - Spinning Pendulum and the Lagrange equations
@@ -28,6 +28,81 @@ Your team's goal is to
 
 """
 
+# ╔═╡ 5b2edaab-756c-42f1-a675-778367b34cfb
+md"""# Building EOM using Lagrange and least action
+
+$L = T - V$
+
+In this project, we model a pendulum attached to a spinning frame rotating at a constant speed $\Omega$. The goal is to build an equation of motion for the pendulum angle $\theta(t)$ that matches the ODE used in the simulation. 
+
+To solve for $T$, we include (1) the normal pendulum kinetic energy from swinging and (2) the kinetic energy from the bob moving around the rotation axis as the frame spins.
+
+We write:
+
+$T = T_1 + T_2$
+
+Swinging kinetic energy:
+
+$T_1 = \frac{1}{2} m L^2 \dot{\theta}^2$
+
+Rotational kinetic energy from the spinning frame:
+
+$T_2 = \frac{1}{2} m \Omega^2 p^2$
+
+We model the radial distance from the spin axis to the bob as:
+
+$p = w_1 + L\sin\theta$
+
+Therefore:
+
+$T = \frac{1}{2} m L^2 \dot{\theta}^2 + \frac{1}{2} m \Omega^2 (w_1 + L\sin\theta)^2$
+
+To solve for $V$, we use gravitational potential energy. With height modeled as $h = -L\cos\theta$:
+
+$V = mgh = mg(-L\cos\theta) = -mgL\cos\theta$
+
+Combining $T$ and $V$ gives:
+
+$L = T - V = \frac{1}{2} m L^2 \dot{\theta}^2 + \frac{1}{2} m \Omega^2 (w_1 + L\sin\theta)^2 + mgL\cos\theta$
+
+Now apply the Euler–Lagrange equation:
+
+$\frac{d}{dt}\left(\frac{\partial L}{\partial \dot{\theta}}\right) - \frac{\partial L}{\partial \theta} = 0$
+
+Step 1: derivative with respect to $\dot{\theta}$:
+
+$\frac{\partial L}{\partial \dot{\theta}} = mL^2\dot{\theta}$
+$\frac{d}{dt}\left(\frac{\partial L}{\partial \dot{\theta}}\right) = mL^2\ddot{\theta}$
+
+Step 2: derivative with respect to $\theta$:
+
+For the rotation term:
+
+$\frac{\partial}{\partial\theta}\left(\frac{1}{2}m\Omega^2(w_1 + L\sin\theta)^2\right)
+= m\Omega^2(w_1 + L\sin\theta)\cdot L\cos\theta$
+
+For the gravity term:
+
+$\frac{\partial}{\partial\theta}(mgL\cos\theta) = -mgL\sin\theta$
+
+So:
+
+$\frac{\partial L}{\partial \theta} = m\Omega^2L(w_1 + L\sin\theta)\cos\theta - mgL\sin\theta$
+
+Substitute into Euler–Lagrange:
+
+$mL^2\ddot{\theta} - \left[m\Omega^2L(w_1 + L\sin\theta)\cos\theta - mgL\sin\theta\right] = 0$
+
+Divide by $mL^2$ and solve for $\ddot{\theta}$:
+
+$\ddot{\theta} = \frac{\Omega^2}{L}(w_1 + L\sin\theta)\cos\theta - \frac{g}{L}\sin\theta$
+
+Resulting in:
+
+$\dot{\theta} = \omega,\quad \dot{\omega} = \frac{\Omega^2}{L}(w_1 + L\sin\theta)\cos\theta - \frac{g}{L}\sin\theta$
+
+"""
+
 # ╔═╡ 599de35a-b0c8-4c03-8112-112b6fec25e7
 begin
 
@@ -43,15 +118,74 @@ init_theta = 0.8;
     m = 0.1
     g = 9.81
     
-    # Equation of Motion: u = [theta, theta_dot]
+#    # Equation of Motion: u = [theta, theta_dot]
+#    function pendulum_system!(du, u, p, t)
+#        θ, ω = u
+#        Ω = p
+#        
+#        du[1] = ω
+#        du[2] = (Ω^2 / L) * (w1 + L * sin(θ)) * cos(θ) - (g / L) * sin(θ)
+#    end
+end
+
+# ╔═╡ 1496dca2-57cc-4f2a-b034-5753ae121662
+# ADDED BY JULIA
+# Symbolics: build θ̈(θ, θ̇, t, m, g, L, Ω, w1, h1) from L = T − V
+begin
+    @variables t
+    @variables θ(t)
+    D = Differential(t)
+    θ̇ = D(θ)
+
+    # Parameter symbols (kept distinct from numeric m, g, L, etc.)
+    @variables mS gS LS ΩS w1S h1S
+
+    # Kinetic energy: T = ½ m [ L^2 θ̇^2 + Ω^2 (w1 + L sinθ)^2 ]
+    kinetic_energy = (1//2) * mS * (LS^2 * θ̇^2 + ΩS^2 * (w1S + LS * sin(θ))^2)
+
+    # Potential energy: V = m g (h1 − L cosθ)
+    potential_energy = mS * gS * (h1S - LS * cos(θ))
+
+    # Lagrangian
+    lagrangian = kinetic_energy - potential_energy
+
+    # Euler–Lagrange: d/dt(∂L/∂θ̇) − ∂L/∂θ = 0
+    dL_dθdot = Symbolics.derivative(lagrangian, θ̇)
+    dL_dθ    = Symbolics.derivative(lagrangian, θ)
+    eom      = expand_derivatives(D(dL_dθdot) - dL_dθ)
+
+    # Solve for θ̈ symbolically
+    θ̈ = D(D(θ))
+    θ̈_expr = Symbolics.solve_for(eom, θ̈)
+
+    # Build a fast numerical function: θ̈(θ, θ̇, t, m, g, L, Ω, w1, h1)
+    tmp_fun = build_function(θ̈_expr,
+                             θ, θ̇, t,
+                             mS, gS, LS, ΩS, w1S, h1S;
+                             expression = Val(false))
+    θ_double_dot_function = tmp_fun isa Function ? tmp_fun : tmp_fun[1]
+
+    # (Optional) Latex views in Pluto
+    T_ltx  = latexify(kinetic_energy)
+    V_ltx  = latexify(potential_energy)
+    L_ltx  = latexify(lagrangian)
+    EOM_ltx = latexify(eom ~ 0)
+end
+
+
+# ╔═╡ 6de72aa2-c6a4-4a35-9be0-e60fa1393ee8
+# ADDED, redefining function with symbolics per previous added paragraph
+    # State u = [θ, ω] with ω = θ̇
     function pendulum_system!(du, u, p, t)
         θ, ω = u
-        Ω = p
-        
+        Ω = p  # keep the same convention: parameter p carries Ω
+
         du[1] = ω
-        du[2] = (Ω^2 / L) * (w1 + L * sin(θ)) * cos(θ) - (g / L) * sin(θ)
+        du[2] = θ_double_dot_function(
+            θ, ω, t,
+            m, g, L, Ω, w1, h1
+        )
     end
-end
 
 # ╔═╡ 0fbb0461-afe1-46f9-bb1b-13a522ca9bea
 begin
@@ -237,8 +371,19 @@ begin
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 DifferentialEquations = "0c46a032-eb83-5123-abaf-570d42b7fbaa"
+Latexify = "23fbe1c1-3f47-55db-b15f-69d7ec21a316"
+OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
+
+[compat]
+DifferentialEquations = "~7.17.0"
+Latexify = "~0.16.10"
+OrdinaryDiffEq = "~6.106.0"
+Plots = "~1.41.4"
+PlutoUI = "~0.7.79"
+Symbolics = "~7.15.3"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -247,7 +392,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.12.4"
 manifest_format = "2.0"
-project_hash = "f85794d56215cea4803e7a2866a0c4b4c291c445"
+project_hash = "aeaa225a56e39b2e2e9b17dd244879a2142ca5ff"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "f7304359109c768cf32dc5fa2d371565bb63b68a"
@@ -265,6 +410,11 @@ deps = ["Pkg"]
 git-tree-sha1 = "6e1d2a35f2f90a4bc7c2ed98079b2ba09c35b83a"
 uuid = "6e696c72-6542-2067-7265-42206c756150"
 version = "1.3.2"
+
+[[deps.AbstractTrees]]
+git-tree-sha1 = "2d9c9a55f9c93e8887ad391fbae72f8ef55e1177"
+uuid = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
+version = "0.4.5"
 
 [[deps.Accessors]]
 deps = ["CompositionsBase", "ConstructionBase", "Dates", "InverseFunctions", "MacroTools"]
@@ -388,6 +538,11 @@ version = "1.11.0"
 [[deps.Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 version = "1.11.0"
+
+[[deps.Bijections]]
+git-tree-sha1 = "a2d308fcd4c2fb90e943cf9cd2fbfa9c32b69733"
+uuid = "e2ed5e7c-b2de-5872-ae92-c73ca462fb04"
+version = "0.2.2"
 
 [[deps.BitFlags]]
 git-tree-sha1 = "0691e34b3bb8be9307330f88d1a3c3f25466c24d"
@@ -536,6 +691,11 @@ git-tree-sha1 = "37ea44092930b1811e666c3bc38065d7d87fcc74"
 uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
 version = "0.13.1"
 
+[[deps.Combinatorics]]
+git-tree-sha1 = "08c8b6831dc00bfea825826be0bc8336fc369860"
+uuid = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
+version = "1.0.2"
+
 [[deps.CommonSolve]]
 git-tree-sha1 = "78ea4ddbcf9c241827e7035c3a03e2e456711470"
 uuid = "38540f10-b2f7-11e9-35d8-d573e4eb0ff2"
@@ -567,6 +727,11 @@ deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
 version = "1.3.0+1"
 
+[[deps.CompositeTypes]]
+git-tree-sha1 = "bce26c3dab336582805503bed209faab1c279768"
+uuid = "b152e2b5-7a66-4b01-a709-34e65c35f657"
+version = "0.1.4"
+
 [[deps.CompositionsBase]]
 git-tree-sha1 = "802bb88cd69dfd1509f6670416bd4434015693ad"
 uuid = "a33af91c-f02d-484b-be07-31d278c5ca2b"
@@ -591,16 +756,12 @@ version = "2.5.0"
 git-tree-sha1 = "b4b092499347b18a015186eae3042f72267106cb"
 uuid = "187b0558-2788-49d3-abe0-74a17ed4e7c9"
 version = "1.6.0"
+weakdeps = ["IntervalSets", "LinearAlgebra", "StaticArrays"]
 
     [deps.ConstructionBase.extensions]
     ConstructionBaseIntervalSetsExt = "IntervalSets"
     ConstructionBaseLinearAlgebraExt = "LinearAlgebra"
     ConstructionBaseStaticArraysExt = "StaticArrays"
-
-    [deps.ConstructionBase.weakdeps]
-    IntervalSets = "8197267c-284f-5f27-9208-e0e47529a953"
-    LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
-    StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [[deps.Contour]]
 git-tree-sha1 = "439e35b0b36e2e5881738abc8857bd92ad6ff9a8"
@@ -806,10 +967,30 @@ git-tree-sha1 = "7442a5dfe1ebb773c29cc2962a8980f47221d76c"
 uuid = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 version = "0.9.5"
 
+[[deps.DomainSets]]
+deps = ["CompositeTypes", "IntervalSets", "LinearAlgebra", "StaticArrays"]
+git-tree-sha1 = "c249d86e97a7e8398ce2068dce4c078a1c3464de"
+uuid = "5b8099bc-c8ec-5219-889f-1d9e522a28bf"
+version = "0.7.16"
+
+    [deps.DomainSets.extensions]
+    DomainSetsMakieExt = "Makie"
+    DomainSetsRandomExt = "Random"
+
+    [deps.DomainSets.weakdeps]
+    Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
+    Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+
 [[deps.Downloads]]
 deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
 version = "1.7.0"
+
+[[deps.DynamicPolynomials]]
+deps = ["Future", "LinearAlgebra", "MultivariatePolynomials", "MutableArithmetics", "Reexport", "Test"]
+git-tree-sha1 = "3f50fa86c968fc1a9e006c07b6bc40ccbb1b704d"
+uuid = "7c1d4256-1411-5781-91ec-d7bc3513ac07"
+version = "0.6.4"
 
 [[deps.EnumX]]
 git-tree-sha1 = "7bebc8aad6ee6217c78c5ddcf7ed289d65d0263e"
@@ -1136,6 +1317,11 @@ git-tree-sha1 = "d1b1b796e47d94588b3757fe84fbf65a5ec4a80d"
 uuid = "d25df0c9-e2be-5dd7-82c8-3ad0b3e990b9"
 version = "0.1.5"
 
+[[deps.IntegerMathUtils]]
+git-tree-sha1 = "4c1acff2dc6b6967e7e750633c50bc3b8d83e617"
+uuid = "18e54dd8-cb9d-406c-a71d-865a43cbb235"
+version = "0.1.3"
+
 [[deps.IntelOpenMP_jll]]
 deps = ["Artifacts", "JLLWrappers", "LazyArtifacts", "Libdl"]
 git-tree-sha1 = "ec1debd61c300961f98064cfb21287613ad7f303"
@@ -1146,6 +1332,17 @@ version = "2025.2.0+0"
 deps = ["Markdown"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 version = "1.11.0"
+
+[[deps.IntervalSets]]
+git-tree-sha1 = "d966f85b3b7a8e49d034d27a189e9a4874b4391a"
+uuid = "8197267c-284f-5f27-9208-e0e47529a953"
+version = "0.7.13"
+weakdeps = ["Random", "RecipesBase", "Statistics"]
+
+    [deps.IntervalSets.extensions]
+    IntervalSetsRandomExt = "Random"
+    IntervalSetsRecipesBaseExt = "RecipesBase"
+    IntervalSetsStatisticsExt = "Statistics"
 
 [[deps.InverseFunctions]]
 git-tree-sha1 = "a779299d77cd080bf77b97535acecd73e1c5e5cb"
@@ -1564,6 +1761,22 @@ version = "2025.11.4"
 git-tree-sha1 = "cac9cc5499c25554cba55cd3c30543cff5ca4fab"
 uuid = "46d2c3a1-f734-5fdb-9937-b9b9aeba4221"
 version = "0.2.4"
+
+[[deps.MultivariatePolynomials]]
+deps = ["DataStructures", "LinearAlgebra", "MutableArithmetics"]
+git-tree-sha1 = "d38b8653b1cdfac5a7da3b819c0a8d6024f9a18c"
+uuid = "102ac46a-7ee4-5c85-9060-abc95bfdeaa3"
+version = "0.5.13"
+weakdeps = ["ChainRulesCore"]
+
+    [deps.MultivariatePolynomials.extensions]
+    MultivariatePolynomialsChainRulesCoreExt = "ChainRulesCore"
+
+[[deps.MutableArithmetics]]
+deps = ["LinearAlgebra", "SparseArrays", "Test"]
+git-tree-sha1 = "22df8573f8e7c593ac205455ca088989d0a2c7a0"
+uuid = "d8a4904e-b15c-11e9-3269-09a3773c0cb0"
+version = "1.6.7"
 
 [[deps.NLSolversBase]]
 deps = ["ADTypes", "DifferentiationInterface", "FiniteDiff", "LinearAlgebra"]
@@ -2046,6 +2259,12 @@ git-tree-sha1 = "522f093a29b31a93e34eaea17ba055d850edea28"
 uuid = "21216c6a-2e73-6563-6e65-726566657250"
 version = "1.5.1"
 
+[[deps.Primes]]
+deps = ["IntegerMathUtils"]
+git-tree-sha1 = "25cdd1d20cd005b52fc12cb6be3f75faaf59bb9b"
+uuid = "27ebfcd6-29c5-5fa9-bf4b-fb8fc14df3ae"
+version = "0.5.7"
+
 [[deps.Printf]]
 deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
@@ -2113,6 +2332,11 @@ deps = ["Random"]
 git-tree-sha1 = "c6ec94d2aaba1ab2ff983052cf6a606ca5985902"
 uuid = "e6cf234a-135c-5ec9-84dd-332b85af5143"
 version = "1.6.0"
+
+[[deps.ReadOnlyArrays]]
+git-tree-sha1 = "e6f7ddf48cf141cb312b078ca21cb2d29d0dc11d"
+uuid = "988b38a3-91fc-5605-94a2-ee2116b3bd83"
+version = "0.2.0"
 
 [[deps.RecipesBase]]
 deps = ["PrecompileTools"]
@@ -2552,6 +2776,63 @@ version = "0.3.46"
     [deps.SymbolicIndexingInterface.weakdeps]
     PrettyTables = "08abe8d2-0d0c-5749-adfa-8a2ac140af0d"
 
+[[deps.SymbolicLimits]]
+deps = ["SymbolicUtils", "TermInterface"]
+git-tree-sha1 = "5085671d2cba1eb02136a3d6661c583e801984c1"
+uuid = "19f23fe9-fdab-4a78-91af-e7b7767979c3"
+version = "1.1.0"
+
+[[deps.SymbolicUtils]]
+deps = ["AbstractTrees", "ArrayInterface", "Combinatorics", "ConstructionBase", "DataStructures", "DocStringExtensions", "DynamicPolynomials", "EnumX", "ExproniconLite", "LinearAlgebra", "MacroTools", "Moshi", "MultivariatePolynomials", "MutableArithmetics", "NaNMath", "PrecompileTools", "ReadOnlyArrays", "Setfield", "SparseArrays", "SpecialFunctions", "StaticArraysCore", "SymbolicIndexingInterface", "TaskLocalValues", "TermInterface", "WeakCacheSets"]
+git-tree-sha1 = "d1c1a41cd8b7ed85559a87ac09b9b0925818aaaa"
+uuid = "d1185830-fcd6-423d-90d6-eec64667417b"
+version = "4.18.5"
+
+    [deps.SymbolicUtils.extensions]
+    SymbolicUtilsChainRulesCoreExt = "ChainRulesCore"
+    SymbolicUtilsDistributionsExt = "Distributions"
+    SymbolicUtilsLabelledArraysExt = "LabelledArrays"
+    SymbolicUtilsReverseDiffExt = "ReverseDiff"
+
+    [deps.SymbolicUtils.weakdeps]
+    ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+    Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+    LabelledArrays = "2ee39098-c373-598a-b85f-a56591580800"
+    ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
+
+[[deps.Symbolics]]
+deps = ["ADTypes", "AbstractPlutoDingetjes", "ArrayInterface", "Bijections", "CommonWorldInvalidations", "ConstructionBase", "DataStructures", "DiffRules", "DocStringExtensions", "DomainSets", "DynamicPolynomials", "Libdl", "LinearAlgebra", "LogExpFunctions", "MacroTools", "Markdown", "Moshi", "MultivariatePolynomials", "MutableArithmetics", "NaNMath", "PrecompileTools", "Preferences", "Primes", "RecipesBase", "Reexport", "RuntimeGeneratedFunctions", "SciMLPublic", "Setfield", "SparseArrays", "SpecialFunctions", "StaticArraysCore", "SymbolicIndexingInterface", "SymbolicLimits", "SymbolicUtils", "TermInterface"]
+git-tree-sha1 = "02687bc18b509620a6472cc90f65da9d3f885a2f"
+uuid = "0c5d862f-8b57-4792-8d23-62f2024744c7"
+version = "7.15.3"
+
+    [deps.Symbolics.extensions]
+    SymbolicsD3TreesExt = "D3Trees"
+    SymbolicsDistributionsExt = "Distributions"
+    SymbolicsForwardDiffExt = "ForwardDiff"
+    SymbolicsGroebnerExt = "Groebner"
+    SymbolicsHypergeometricFunctionsExt = "HypergeometricFunctions"
+    SymbolicsLatexifyExt = ["Latexify", "LaTeXStrings"]
+    SymbolicsLuxExt = "Lux"
+    SymbolicsNemoExt = "Nemo"
+    SymbolicsPreallocationToolsExt = ["PreallocationTools", "ForwardDiff"]
+    SymbolicsSymPyExt = "SymPy"
+    SymbolicsSymPyPythonCallExt = "SymPyPythonCall"
+
+    [deps.Symbolics.weakdeps]
+    D3Trees = "e3df1716-f71e-5df9-9e2d-98e193103c45"
+    Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+    ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+    Groebner = "0b43b601-686d-58a3-8a1c-6623616c7cd4"
+    HypergeometricFunctions = "34004b35-14d8-5ef3-9330-4cdb6864b03a"
+    LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
+    Latexify = "23fbe1c1-3f47-55db-b15f-69d7ec21a316"
+    Lux = "b2108857-7c20-44ae-9111-449ecde12c47"
+    Nemo = "2edaba10-b0f1-5616-af89-8c11ac63239a"
+    PreallocationTools = "d236fae5-4411-538c-8e31-a6e3d9e00b46"
+    SymPy = "24249f21-da20-56a4-8eb1-6a02cf4ae2e6"
+    SymPyPythonCall = "bc8888f7-b21e-4b7c-a06a-5d9c9496438c"
+
 [[deps.TOML]]
 deps = ["Dates"]
 uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
@@ -2562,11 +2843,21 @@ deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
 version = "1.10.0"
 
+[[deps.TaskLocalValues]]
+git-tree-sha1 = "67e469338d9ce74fc578f7db1736a74d93a49eb8"
+uuid = "ed4db957-447d-4319-bfb6-7fa9ae7ecf34"
+version = "0.1.3"
+
 [[deps.TensorCore]]
 deps = ["LinearAlgebra"]
 git-tree-sha1 = "1feb45f88d133a655e001435632f019a9a1bcdb6"
 uuid = "62fd8b95-f654-4bbd-a8a5-9c27f68ccd50"
 version = "0.1.1"
+
+[[deps.TermInterface]]
+git-tree-sha1 = "d673e0aca9e46a2f63720201f55cc7b3e7169b16"
+uuid = "8ea1fca8-c5ef-4a55-8b96-4e9afe9c9a3c"
+version = "2.0.0"
 
 [[deps.Test]]
 deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
@@ -2643,6 +2934,11 @@ deps = ["Artifacts", "EpollShim_jll", "Expat_jll", "JLLWrappers", "Libdl", "Libf
 git-tree-sha1 = "96478df35bbc2f3e1e791bc7a3d0eeee559e60e9"
 uuid = "a2964d1f-97da-50d4-b82a-358c7fce9d89"
 version = "1.24.0+0"
+
+[[deps.WeakCacheSets]]
+git-tree-sha1 = "386050ae4353310d8ff9c228f83b1affca2f7f38"
+uuid = "d30d5f5c-d141-4870-aa07-aabb0f5fe7d5"
+version = "0.1.0"
 
 [[deps.XZ_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -2908,9 +3204,12 @@ version = "1.13.0+0"
 # ╔═╡ Cell order:
 # ╟─f17103ea-06bf-11f1-a2b0-79e68ed152eb
 # ╠═0d9be664-d7c5-4084-add2-25e5418742d6
-# ╠═599de35a-b0c8-4c03-8112-112b6fec25e7
-# ╠═0fbb0461-afe1-46f9-bb1b-13a522ca9bea
-# ╠═64a37cb4-097e-4c85-b773-8d85b6870e49
+# ╟─5b2edaab-756c-42f1-a675-778367b34cfb
+# ╟─599de35a-b0c8-4c03-8112-112b6fec25e7
+# ╠═1496dca2-57cc-4f2a-b034-5753ae121662
+# ╟─6de72aa2-c6a4-4a35-9be0-e60fa1393ee8
+# ╟─0fbb0461-afe1-46f9-bb1b-13a522ca9bea
+# ╟─64a37cb4-097e-4c85-b773-8d85b6870e49
 # ╠═c7f747c0-5949-4bc7-a5e2-0f2e13323623
 # ╠═d0a6ba32-f379-47e0-8968-33651311aa94
 # ╠═f18fe5d7-5adc-4244-b2d8-adf38a40932c
